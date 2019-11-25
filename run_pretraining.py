@@ -18,6 +18,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from functools import partial
 import os
 import modeling
 import optimization
@@ -358,17 +359,19 @@ def input_fn_builder(input_files,
 
       # `cycle_length` is the number of parallel files that get read.
       cycle_length = min(num_cpu_threads, len(input_files))
+      tf_record_dataset = partial(tf.data.TFRecordDataset, compression_type='ZLIB')
 
       # `sloppy` mode means that the interleaving is not exact. This adds
       # even more randomness to the training pipeline.
       d = d.apply(
           tf.contrib.data.parallel_interleave(
-              tf.data.TFRecordDataset,
+              # tf.data.TFRecordDataset,
+              tf_record_dataset,
               sloppy=is_training,
               cycle_length=cycle_length))
       d = d.shuffle(buffer_size=100)
     else:
-      d = tf.data.TFRecordDataset(input_files)
+      d = tf.data.TFRecordDataset(input_files, compression_type='ZLIB')
       # Since we evaluate for a fixed number of steps we don't want to encounter
       # out-of-range exceptions.
       d = d.repeat()
