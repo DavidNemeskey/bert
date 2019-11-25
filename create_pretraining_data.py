@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+import gzip
 import random
 import tokenization
 import tensorflow as tf
