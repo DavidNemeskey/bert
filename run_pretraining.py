@@ -68,6 +68,8 @@ flags.DEFINE_integer("eval_batch_size", 8, "Total batch size for eval.")
 
 flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 
+flags.DEFINE_float("beta2", 0.999, "The initial beta_2 for Adam.")
+
 flags.DEFINE_integer("num_train_steps", 100000, "Number of training steps.")
 
 flags.DEFINE_integer("num_warmup_steps", 10000, "Number of warmup steps.")
@@ -107,7 +109,7 @@ flags.DEFINE_integer(
     "Only used if `use_tpu` is True. Total number of TPU cores to use.")
 
 
-def model_fn_builder(bert_config, init_checkpoint, learning_rate,
+def model_fn_builder(bert_config, init_checkpoint, learning_rate, beta2,
                      num_train_steps, num_warmup_steps, use_tpu,
                      use_one_hot_embeddings):
   """Returns `model_fn` closure for TPUEstimator."""
@@ -176,7 +178,8 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
       train_op = optimization.create_optimizer(
-          total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
+          total_loss, learning_rate, beta2, num_train_steps,
+          num_warmup_steps, use_tpu)
 
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
@@ -444,6 +447,7 @@ def main(_):
       bert_config=bert_config,
       init_checkpoint=FLAGS.init_checkpoint,
       learning_rate=FLAGS.learning_rate,
+      beta2=FLAGS.beta2,
       num_train_steps=FLAGS.num_train_steps,
       num_warmup_steps=FLAGS.num_warmup_steps,
       use_tpu=FLAGS.use_tpu,
