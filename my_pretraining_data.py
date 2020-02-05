@@ -73,7 +73,7 @@ def collect_input_files(input_dir, output_dir, merge=1):
 
 def run_preprocessing(record: PretrainingRecord, script_args: str):
     os.system(f'python create_pretraining_data.py '
-              f'--input_file={",".join(record.inputs)}'
+              f'--input_file={",".join(record.inputs)} '
               f'--output_file={record.output}.tfrecord {script_args}')
 
 
