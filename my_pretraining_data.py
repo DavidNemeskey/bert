@@ -12,13 +12,16 @@ from argparse import ArgumentParser
 import collections
 from dataclasses import dataclass
 from functools import partial
+import logging
 from multiprocessing import Pool
 import os
 import re
+from subprocess import CalledProcessError, PIPE, run
 import tqdm
 from typing import List
 
 from more_itertools import chunked, flatten
+from multiprocessing_logging import install_mp_handler
 
 
 def parse_arguments():
@@ -72,16 +75,29 @@ def collect_input_files(input_dir, output_dir, merge=1):
 
 
 def run_preprocessing(record: PretrainingRecord, script_args: str):
-    os.system(f'python create_pretraining_data.py '
-              f'--input_file={",".join(record.inputs)} '
-              f'--output_file={record.output}.tfrecord {script_args}')
+    inputs = ",".join(record.inputs)
+    logging.info(f'Processing files {inputs}...')
+    try:
+        run(
+            f'python create_pretraining_data.py --input_file={inputs} '
+            f'--output_file={record.output}.tfrecord {script_args}',
+            shell=True, stdout=PIPE, stderr=PIPE, check=True
+        )
+    except CalledProcessError as ce:
+        logging.exception(f'Could not finish files {inputs}')
+    logging.info(f'Finished processing files {inputs}.')
 
 
 def main():
     args = parse_arguments()
 
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(process)s - %(levelname)s - %(message)s'
+    )
+    install_mp_handler()
+
     inputs = args.input_dir
-    print(args.merge)
     merges = (args.merge + [1] * (len(inputs) - len(args.merge)))[:len(inputs)]
 
     os.nice(20)

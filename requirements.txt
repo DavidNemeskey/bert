@@ -1,4 +1,5 @@
 more_itertools >= 7.2.0
+multiprocessing_logging
 tqdm
 tensorflow >= 1.11.0   # CPU Version of TensorFlow.
 # tensorflow-gpu  >= 1.11.0  # GPU version of TensorFlow.
