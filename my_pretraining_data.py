@@ -17,11 +17,12 @@ from multiprocessing import Pool
 import os
 import re
 from subprocess import CalledProcessError, PIPE, run
-import tqdm
+import sys
 from typing import List
 
 from more_itertools import chunked, flatten
 from multiprocessing_logging import install_mp_handler
+import tqdm
 
 
 def parse_arguments():
@@ -110,7 +111,8 @@ def main():
     )
     with Pool(args.processes) as pool:
         f = partial(run_preprocessing, script_args=args.script_args)
-        it = tqdm.tqdm(pool.imap_unordered(f, to_process), total=len(to_process))
+        it = tqdm.tqdm(pool.imap_unordered(f, to_process),
+                       total=len(to_process), file=sys.stdout)
         collections.deque(it, maxlen=0)
 
 
