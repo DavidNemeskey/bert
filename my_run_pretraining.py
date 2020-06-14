@@ -83,7 +83,7 @@ def last_checkpoint(output_dir):
 
 def main():
     args = parse_arguments()
-    cmd, output_dir = read_command_file(args.cmd_file)
+    cmd, output_dir = read_command_file(args.command_line)
     tpu_cmd = read_tpu_file(args.tpu_command)
 
     logging.basicConfig(
