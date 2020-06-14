@@ -56,22 +56,22 @@ def read_tpu_file(tpu_file):
 def restart_tpu(tpu_cmd):
     """Deletes and recreates the TPU."""
     tpu_name = re.search(r'gcloud\s+compute\s+tpus\s+create\s+(\S+)', tpu_cmd).group(1)
-    delete = sp.run(f'yes | gcloud compute tpus delete {tpu_name}')
+    delete = sp.run('yes | gcloud compute tpus delete {}'.format(tpu_name), shell=True)
     if delete.returncode:
-        raise RuntimeError(f'Could not delete TPU {tpu_name}.')
+        raise RuntimeError('Could not delete TPU {}.'.format(tpu_name))
     for i in range(3):
         create = sp.run(tpu_cmd)
         if create.returncode == 0:
             return
     else:
-        raise RuntimeError(f'Could not create TPU {tpu_name}.')
+        raise RuntimeError('Could not create TPU {}.'.format(tpu_name), shell=True)
 
 
-def last_checkpoint(output_dir: str) -> str:
+def last_checkpoint(output_dir):
     """
     Finds the last checkpoint in _output_dir_. Returns ``None`` if none exists.
     """
-    ret = sp.run(f'gsutil cp {output_dir}/checkpoint .', shell=True)
+    ret = sp.run('gsutil cp {}/checkpoint .'.format(output_dir), shell=True)
     if ret.returncode == 0:
         with open('checkpoint') as inf:
             m = re.search(r'^model_checkpoint_path:\s*"([^"]+)"$', inf.read(), re.M)
@@ -90,7 +90,7 @@ def main():
         format='%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%m/%d/%Y %H:%M:%S', level=logging.DEBUG
     )
-    logging.info(f'Running command {cmd}...')
+    logging.info('Running command {}...'.format(cmd))
 
     node_closed_p = re.compile('Cancelled: Node was closed')
     state_msg_p = re.compile(r'TPUPollingThread found TPU.*in state READY, and health (.+?)\.')
@@ -109,8 +109,10 @@ def main():
 
         cp = last_checkpoint(output_dir)
         if cp:
-            logging.info(f'Found checkpoint {cp}.')
-        full_cmd = cmd if not cp else f'{cmd} --init_checkpoint={cp}'
+            logging.info('Found checkpoint {}.'.format(cp))
+        full_cmd = cmd if not cp else '{} --init_checkpoint={}'.format(cmd, cp)
+
+        logging.info('Full command: {}'.format(full_cmd))
 
         proc = sp.Popen(full_cmd, shell=True, stdout=sp.PIPE, stderr=sp.STDOUT,
                         text=True, encoding='utf-8')
