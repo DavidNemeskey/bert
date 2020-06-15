@@ -97,7 +97,7 @@ def run_one(full_cmd, log_file):
     time.sleep(5)
 
     tail_proc = sp.Popen('tail -f ' + log_file, shell=True, stdout=sp.PIPE,
-                         buf_size=1)
+                         bufsize=1)
 
     node_closed_p = re.compile('Cancelled: Node was closed')
     state_msg_p = re.compile(
