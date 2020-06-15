@@ -16,10 +16,10 @@ In both cases, the --init_checkpoint parameter is set to the latest checkpoint.
 from argparse import ArgumentParser
 import logging
 import os
-import pty
+import re
 import select
 import subprocess as sp
-import re
+import time
 
 
 def parse_arguments():
@@ -31,6 +31,9 @@ def parse_arguments():
     parser.add_argument('--tpu-command', '-t', required=True, metavar='FILE',
                         help='the FILE that contains the command to create '
                              'the TPU.')
+    parser.add_argument('--log-file', '-l', required=True, metavar='FILE',
+                        help='the log file to append to and the one that is '
+                             'monitored.')
     return parser.parse_args()
 
 
@@ -86,11 +89,15 @@ def last_checkpoint(output_dir):
 OK, ERROR, PREEMPTED = range(3)
 
 
-def run_one(full_cmd):
-    master_fd, slave_fd = pty.openpty()
-    proc = sp.Popen(full_cmd, shell=True, stdout=slave_fd, stderr=sp.STDOUT,
-                    # text=True, encoding='utf-8', close_fds=True)
-                    universal_newlines=True, close_fds=True)
+def run_one(full_cmd, log_file):
+    train_proc = sp.Popen(full_cmd + ' >> ' + log_file + ' 2>&1', shell=True)
+    # text=True, encoding='utf-8', close_fds=True)
+
+    # Let's wait a bit so that we don't see the output from the last run
+    time.sleep(5)
+
+    tail_proc = sp.Popen('tail -f ' + log_file, shell=True, stdout=sp.PIPE,
+                         buf_size=1)
 
     node_closed_p = re.compile('Cancelled: Node was closed')
     state_msg_p = re.compile(
@@ -101,9 +108,9 @@ def run_one(full_cmd):
     old_data = b''
     try:
         while True:
-            ready, _, _ = select.select([master_fd], [], [], timeout)
+            ready, _, _ = select.select([tail_proc.stdout], [], [], timeout)
             if ready:
-                new_data = os.read(master_fd, 4096)
+                new_data = tail_proc.stdout.read(4096)
                 # Apparently this also indicates an error (peer disconnected)
                 if not new_data:
                     return tpu_status
@@ -126,18 +133,20 @@ def run_one(full_cmd):
                             logging.warning('An error happened, and the script '
                                             'has to be restarted.')
                             return ERROR
-            elif proc.poll() is not None:
+            elif train_proc.poll() is not None:
                 # Process exited
                 return tpu_status
     finally:
-        os.close(master_fd)
-        os.close(slave_fd)
-        # Make sure the process is stopped before returning
-        if proc.poll() is None:
-            logging.info('Terminating process...')
-            proc.terminate()
-        else:
-            logging.info('Process terminated.')
+        # Make sure the processes are stopped before returning
+        if tail_proc.poll() is None:
+            logging.info('Terminating tail process...')
+            tail_proc.terminate()
+        if train_proc.poll() is None:
+            logging.info('Terminating trainig process...')
+            train_proc.terminate()
+        tail_proc.wait()
+        train_proc.wait()
+        logging.info('Processes terminated.')
 
 
 def main():
