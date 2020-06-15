@@ -16,6 +16,8 @@ In both cases, the --init_checkpoint parameter is set to the latest checkpoint.
 from argparse import ArgumentParser
 import logging
 import os
+import pty
+import select
 import subprocess as sp
 import re
 
@@ -81,6 +83,63 @@ def last_checkpoint(output_dir):
         return None
 
 
+OK, ERROR, PREEMPTED = range(3)
+
+
+def run_one(full_cmd):
+    master_fd, slave_fd = pty.openpty()
+    proc = sp.Popen(full_cmd, shell=True, stdout=slave_fd, stderr=sp.STDOUT,
+                    # text=True, encoding='utf-8', close_fds=True)
+                    universal_newlines=True, close_fds=True)
+
+    node_closed_p = re.compile('Cancelled: Node was closed')
+    state_msg_p = re.compile(
+        r'TPUPollingThread found TPU.*in state READY, and health (.+?)\.')
+
+    tpu_status = OK
+    timeout = 5
+    old_data = b''
+    try:
+        while True:
+            ready, _, _ = select.select([master_fd], [], [], timeout)
+            if ready:
+                new_data = os.read(master_fd, 4096)
+                # Apparently this also indicates an error (peer disconnected)
+                if not new_data:
+                    return tpu_status
+                data = old_data + new_data
+                *lines, old_data = data.split(b'\n')
+                for line in lines:
+                    line = line.rstrip().decode('utf-8')
+                    print(line)
+                    m = node_closed_p.search(line)
+                    if m:
+                        tpu_status = ERROR
+                        logging.debug('Node was closed.')
+                        continue
+                    m = state_msg_p.search(line)
+                    if m:
+                        if m.group(1) == 'UNHEALTHY_MAINTENANCE':
+                            logging.warning('The TPU has been preempted.')
+                            return PREEMPTED
+                        if tpu_status == ERROR:
+                            logging.warning('An error happened, and the script '
+                                            'has to be restarted.')
+                            return ERROR
+            elif proc.poll() is not None:
+                # Process exited
+                return tpu_status
+    finally:
+        os.close(master_fd)
+        os.close(slave_fd)
+        # Make sure the process is stopped before returning
+        if proc.poll() is None:
+            logging.info('Terminating process...')
+            proc.terminate()
+        else:
+            logging.info('Process terminated.')
+
+
 def main():
     args = parse_arguments()
     cmd, output_dir = read_command_file(args.command_line)
@@ -92,10 +151,6 @@ def main():
     )
     logging.info('Running command {}...'.format(cmd))
 
-    node_closed_p = re.compile('Cancelled: Node was closed')
-    state_msg_p = re.compile(r'TPUPollingThread found TPU.*in state READY, and health (.+?)\.')
-
-    OK, ERROR, PREEMPTED = range(3)
     tpu_status = OK
 
     while True:
@@ -114,39 +169,10 @@ def main():
 
         logging.info('Full command: {}'.format(full_cmd))
 
-        proc = sp.Popen(full_cmd, shell=True, stdout=sp.PIPE, stderr=sp.STDOUT,
-                        text=True, encoding='utf-8')
-
-        while True:
-            line = proc.stdout.readline()
-            if not line:
-                break
-            else:
-                print(line.strip())
-                m = node_closed_p.search(line)
-                if m:
-                    tpu_status = ERROR
-                    logging.debug('Node was closed.')
-                    continue
-                m = state_msg_p.search(line)
-                if m:
-                    if m.group(1) == 'UNHEALTHY_MAINTENANCE':
-                        # TODO preempted
-                        tpu_status = PREEMPTED
-                        logging.warning('The TPU has been preempted.')
-                        break
-                    if tpu_status == ERROR:
-                        logging.warning('An error happened, and the script '
-                                        'has to be restarted.')
-                        break
-
-        # We broke from the inner loop
+        tpu_status = run_one(full_cmd)
         if tpu_status == OK:
-            # Exit from the inner loop
+            # Exit from the loop
             break
-        else:
-            logging.info('Terminating process...')
-            proc.terminate()
 
     logging.info('Done.')
 
