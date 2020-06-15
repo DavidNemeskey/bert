@@ -178,7 +178,7 @@ def main():
 
         logging.info('Full command: {}'.format(full_cmd))
 
-        tpu_status = run_one(full_cmd)
+        tpu_status = run_one(full_cmd, args.log_file)
         if tpu_status == OK:
             # Exit from the loop
             break
