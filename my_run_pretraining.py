@@ -119,7 +119,7 @@ def run_one(full_cmd, log_file):
                 *lines, old_data = data.split(b'\n')
                 for line in lines:
                     line = line.rstrip().decode('utf-8')
-                    print(line)
+                    print(line, flush=True)
                     m = node_closed_p.search(line)
                     if m:
                         tpu_status = ERROR
