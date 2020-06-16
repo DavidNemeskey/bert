@@ -100,6 +100,7 @@ def run_one(full_cmd, log_file):
                          bufsize=1)
 
     node_closed_p = re.compile('Cancelled: Node was closed')
+    infeed_error_p = re.compile('ERROR:tensorflow:Error recorded from infeed')
     state_msg_p = re.compile(
         r'TPUPollingThread found TPU.*in state READY, and health (.+?)\.')
 
@@ -124,6 +125,11 @@ def run_one(full_cmd, log_file):
                         tpu_status = ERROR
                         logging.debug('Node was closed.')
                         continue
+                    m = infeed_error_p.search(line)
+                    if m:
+                        tpu_status = ERROR
+                        logging.debug('Infeed error.')
+                        continue
                     m = state_msg_p.search(line)
                     if m:
                         if m.group(1) == 'UNHEALTHY_MAINTENANCE':
@@ -142,7 +148,7 @@ def run_one(full_cmd, log_file):
             logging.info('Terminating tail process...')
             tail_proc.terminate()
         if train_proc.poll() is None:
-            logging.info('Terminating trainig process...')
+            logging.info('Terminating training process...')
             train_proc.terminate()
         tail_proc.wait()
         train_proc.wait()
