@@ -65,7 +65,7 @@ def restart_tpu(tpu_cmd):
     if delete.returncode:
         raise RuntimeError('Could not delete TPU {}.'.format(tpu_name))
     for i in range(3):
-        create = sp.run(tpu_cmd)
+        create = sp.run(tpu_cmd, shell=True)
         if create.returncode == 0:
             return
     else:
@@ -146,10 +146,10 @@ def run_one(full_cmd, log_file):
         # Make sure the processes are stopped before returning
         if tail_proc.poll() is None:
             logging.info('Terminating tail process...')
-            tail_proc.terminate()
+            tail_proc.kill()
         if train_proc.poll() is None:
             logging.info('Terminating training process...')
-            train_proc.terminate()
+            train_proc.kill()
         tail_proc.wait()
         train_proc.wait()
         logging.info('Processes terminated.')
