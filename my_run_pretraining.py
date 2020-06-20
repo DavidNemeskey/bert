@@ -103,6 +103,7 @@ def run_one(full_cmd, log_file):
     infeed_error_p = re.compile('ERROR:tensorflow:Error recorded from infeed')
     state_msg_p = re.compile(
         r'TPUPollingThread found TPU.*in state READY, and health (.+?)\.')
+    done_msg_p = re.compile('training_loop marked as finished$')
 
     tpu_status = OK
     timeout = 5
@@ -139,6 +140,10 @@ def run_one(full_cmd, log_file):
                             logging.warning('An error happened, and the script '
                                             'has to be restarted.')
                             return ERROR
+                    m = done_msg_p.search(line)
+                    if m:
+                        logging.error('Traning loop finished.')
+                        return OK
             elif train_proc.poll() is not None:
                 # Process exited
                 return tpu_status
