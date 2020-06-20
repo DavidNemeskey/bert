@@ -90,14 +90,14 @@ OK, ERROR, PREEMPTED = range(3)
 
 
 def run_one(full_cmd, log_file):
-    train_proc = sp.Popen(full_cmd + ' >> ' + log_file + ' 2>&1', shell=True)
+    # See https://stackoverflow.com/questions/4789837/
+    train_proc = sp.Popen('exec ' + full_cmd + ' >> ' + log_file + ' 2>&1', shell=True)
     # text=True, encoding='utf-8', close_fds=True)
 
     # Let's wait a bit so that we don't see the output from the last run
     time.sleep(5)
 
-    tail_proc = sp.Popen('tail -f ' + log_file, shell=True, stdout=sp.PIPE,
-                         bufsize=1)
+    tail_proc = sp.Popen(['tail', '-f', log_file], stdout=sp.PIPE, bufsize=1)
 
     node_closed_p = re.compile('Cancelled: Node was closed')
     infeed_error_p = re.compile('ERROR:tensorflow:Error recorded from infeed')
@@ -143,6 +143,7 @@ def run_one(full_cmd, log_file):
                 # Process exited
                 return tpu_status
     finally:
+        logging.debug('Finally is running...')
         # Make sure the processes are stopped before returning
         if tail_proc.poll() is None:
             logging.info('Terminating tail process...')
@@ -150,6 +151,7 @@ def run_one(full_cmd, log_file):
         if train_proc.poll() is None:
             logging.info('Terminating training process...')
             train_proc.kill()
+            train_proc.communicate()
         tail_proc.wait()
         train_proc.wait()
         logging.info('Processes terminated.')
@@ -184,7 +186,11 @@ def main():
 
         logging.info('Full command: {}'.format(full_cmd))
 
-        tpu_status = run_one(full_cmd, args.log_file)
+        try:
+            tpu_status = run_one(full_cmd, args.log_file)
+        except:
+            logging.exception('Exiting...')
+            return
         if tpu_status == OK:
             # Exit from the loop
             break
